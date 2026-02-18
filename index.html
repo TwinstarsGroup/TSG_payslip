@@ -114,8 +114,8 @@ button:disabled {
     Please backup your data regularly using the Export button below.
   </p>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-    <button class="primary" onclick="exportData()" style="background: #28a745;">📥 Export Data (Backup)</button>
-    <button class="secondary" onclick="importData()">📤 Import Data (Restore)</button>
+    <button class="primary" onclick="exportData()" style="background: #28a745;" aria-label="Export employee data as backup file">📥 Export Data (Backup)</button>
+    <button class="secondary" onclick="importData()" aria-label="Import employee data from backup file">📤 Import Data (Restore)</button>
   </div>
   <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
 </div>
@@ -751,7 +751,13 @@ function handleFileImport(event) {
       localStorage.setItem("employees", JSON.stringify(backupData.employees));
       localStorage.setItem("deleteLogs", JSON.stringify(backupData.deleteLogs || []));
       
-      alert(`Data imported successfully!\nBackup Date: ${new Date(backupData.exportDate).toLocaleString()}\nEmployees: ${Object.keys(backupData.employees).length}`);
+      const backupDate = new Date(backupData.exportDate).toLocaleString();
+      const employeeCount = Object.keys(backupData.employees).length;
+      alert(
+        `Data imported successfully!\n\n` +
+        `Backup Date: ${backupDate}\n` +
+        `Employees Restored: ${employeeCount}`
+      );
       
       loadDropdown();
       clearForm();
