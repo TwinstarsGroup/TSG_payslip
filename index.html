@@ -308,7 +308,7 @@ function downloadPDF() {
 
   // Check if at least one income component has a value
   if (basicSalary === 0 && hraAmount === 0 && otherAllowance === 0) {
-    alert("At least one income component (Basic Salary, HRA, or Other Allowances) must have a value");
+    alert("At least one income component (Basic Salary, HRA, or Other Allowances) must be greater than 0");
     return;
   }
 
