@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Payslip Generator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <style>
 * { box-sizing: border-box; }
@@ -67,6 +68,7 @@ button {
 .primary { background: #0057b7; color: #fff; }
 .secondary { background: #777; color: #fff; }
 .danger { background: #b70000; color: #fff; }
+.clear-btn { background: #ff8c00; color: #fff; }
 
 button:disabled {
   background: #ccc;
@@ -95,8 +97,25 @@ button:disabled {
 <!-- ADMIN LOGIN -->					
 <div class="card" id="adminLoginCard">
   <h2>Admin Login</h2>
-  <input id="adminPin" type="password" maxlength="6" placeholder="Enter 6-digit Admin PIN">
-  <button class="primary" onclick="adminLogin()">Login</button>
+  <p style="text-align: center; color: #666; margin-bottom: 20px;">Sign in with your Google account to access the admin panel</p>
+  <div id="g_id_onload"
+       data-client_id="YOUR_GOOGLE_CLIENT_ID"
+       data-callback="handleCredentialResponse"
+       data-auto_prompt="false">
+  </div>
+  <div class="g_id_signin" 
+       data-type="standard"
+       data-size="large"
+       data-theme="outline"
+       data-text="sign_in_with"
+       data-shape="rectangular"
+       data-logo_alignment="left"
+       style="display: flex; justify-content: center;">
+  </div>
+  <div style="margin-top: 20px; padding: 12px; background: #f0f8ff; border-radius: 6px; font-size: 13px; color: #0057b7;">
+    <strong>Setup Required:</strong> Replace <code>YOUR_GOOGLE_CLIENT_ID</code> in the HTML with your actual Google OAuth Client ID from Google Cloud Console.<br><br>
+    <strong>Note:</strong> For demo purposes, any Google account can sign in. In production, you should restrict access to specific email domains or users through server-side validation.
+  </div>
 </div>
 
 <!-- DATA BACKUP WARNING -->
@@ -213,6 +232,7 @@ button:disabled {
   <div><button class="danger" onclick="deleteEmployee()" id="deleteBtn" disabled>Delete Employee</button></div>
   <div><button onclick="viewDeleteLog()">View Delete Log</button></div>
   <div><button class="secondary" onclick="adminLogout()" id="logoutBtn" disabled>Logout Admin</button></div>
+  <div class="form-grid-full"><button class="clear-btn" onclick="clearFormData()">🗑️ Clear All Fields</button></div>
 </div>
 </div>
 
@@ -220,9 +240,51 @@ button:disabled {
 
 <script>
 /* ================= ADMIN CONFIG ================= */
-const ADMIN_PIN = "246810";
 const AUTO_LOGOUT_TIME = 10 * 60 * 1000;
 let logoutTimer;
+let currentAdminEmail = null;
+
+/* ================= GOOGLE OAUTH ================= */
+function handleCredentialResponse(response) {
+  try {
+    // Decode the JWT token to get user info
+    const responsePayload = parseJwt(response.credential);
+    
+    // Validate email exists in the token
+    if (!responsePayload || !responsePayload.email) {
+      alert("Authentication failed: Unable to retrieve email from Google account");
+      return;
+    }
+    
+    currentAdminEmail = responsePayload.email;
+    
+    // Store authentication
+    sessionStorage.setItem("adminAuth", "true");
+    sessionStorage.setItem("adminEmail", currentAdminEmail);
+    
+    // Hide login card and show main interface
+    document.getElementById("adminLoginCard").style.display = "none";
+    document.getElementById("dataWarning").style.display = "block";
+    
+    startAutoLogoutTimer();
+    updateAdminUI();
+    
+    alert(`Admin access granted for ${currentAdminEmail}`);
+  } catch (error) {
+    console.error("Authentication error:", error);
+    alert("Authentication failed: Invalid or malformed token. Please try again.");
+  }
+}
+
+function parseJwt(token) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+  }).join(''));
+  
+  return JSON.parse(jsonPayload);
+}
 
 /* ================= STORAGE ================= */					 
 function getData() {
@@ -598,27 +660,20 @@ function clearForm() {
   employeeSelect.value = "";
 }
 
-/*--------------ADMIN SESSION LOGIC---------------------------*/
-function adminLogin() {
-  if (adminPin.value === ADMIN_PIN) {
-    sessionStorage.setItem("adminAuth", "true");
-    adminPin.value = "";
-    document.getElementById("adminLoginCard").style.display = "none";
-    document.getElementById("dataWarning").style.display = "block";
-
-    startAutoLogoutTimer(); // ⏱️ START TIMER
-    updateAdminUI(); // Update button states
-
-    alert("Admin access granted");
-  } else {
-    alert("Invalid Admin PIN");
+/*--------------Clear Form Data (User Action)-------------------------------*/
+function clearFormData() {
+  if (confirm("Are you sure you want to clear all fields?")) {
+    clearForm();
+    alert("All fields have been cleared.");
   }
 }
 
-
+/*--------------ADMIN SESSION LOGIC---------------------------*/
 function adminLogout() {
   clearTimeout(logoutTimer);
   sessionStorage.removeItem("adminAuth");
+  sessionStorage.removeItem("adminEmail");
+  currentAdminEmail = null;
   clearForm();
   location.reload();
 }
@@ -773,6 +828,7 @@ function handleFileImport(event) {
 /* ================= INIT ================= */
 window.onload = () => {
 	if (isAdmin()) {
+    currentAdminEmail = sessionStorage.getItem("adminEmail");
     document.getElementById("adminLoginCard").style.display = "none";
     document.getElementById("dataWarning").style.display = "block";
     startAutoLogoutTimer();
