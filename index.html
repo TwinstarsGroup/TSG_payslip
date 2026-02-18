@@ -306,9 +306,6 @@ function downloadPDF() {
   const BRAND_ACCENT  = [64, 170, 165];  // Teal
   const TEXT_DARK     = [40, 40, 40];
   const TEXT_MUTED    = [120, 120, 120];
-  
-  const AUTO_LOGOUT_TIME = 10 * 60 * 1000; // 10 minutes
-  let logoutTimer;
 
 
   doc.setFont("helvetica", "normal");
@@ -394,8 +391,6 @@ function downloadPDF() {
   const net = b + h + o - d;
 
   const fmt = n => "Rs. " + n.toLocaleString("en-IN");
-  
-  const ADMIN_PIN = "246810"; // 🔐 change this to your 6-digit PIN
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
@@ -565,6 +560,7 @@ function adminLogin() {
     document.getElementById("adminLoginCard").style.display = "none";
 
     startAutoLogoutTimer(); // ⏱️ START TIMER
+    updateAdminUI(); // Update button states
 
     alert("Admin access granted");
   } else {
@@ -598,6 +594,12 @@ function resetAutoLogoutTimer() {
   if (isAdmin()) {
     startAutoLogoutTimer();
   }
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  document.getElementById("deleteBtn").disabled = !admin;
+  document.getElementById("logoutBtn").disabled = !admin;
 }
 
 
