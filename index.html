@@ -470,7 +470,9 @@ function downloadPDF() {
   y = 52;
 
   /* ---------- PAYSLIP META ---------- */
-  const issueDate = new Date(dateOfIssueValue).toLocaleDateString();
+  // Parse date to avoid timezone issues with date input format (YYYY-MM-DD)
+  const [year, month, day] = dateOfIssueValue.split('-');
+  const issueDate = new Date(year, month - 1, day).toLocaleDateString();
 
   doc.setTextColor(...TEXT_MUTED);
   doc.setFontSize(10);
