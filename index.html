@@ -473,7 +473,7 @@ function downloadPDF() {
   doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 4, 4, "F");
 
   doc.setTextColor(...TEXT_DARK);
-  doc.setFontSize(11);
+  doc.setFontSize(14);
 
   y += 8;
   doc.text(`Employee Name : ${empName.value}`, margin + 6, y);
@@ -551,7 +551,7 @@ function downloadPDF() {
   /* ---------- WATERMARK ---------- */
   if (logoBase64.value.startsWith("data:image")) {
     try {
-      doc.setGState(new doc.GState({ opacity: 0.05 }));
+      doc.setGState(new doc.GState({ opacity: 0.25 }));
       doc.addImage(
         logoBase64.value,
         "PNG",
@@ -566,7 +566,7 @@ function downloadPDF() {
 
   /* ---------- FOOTER ---------- */
   /* ---------- FOOTER STRIP ---------- */
-const footerHeight = 14;
+const footerHeight = 10;
 const footerY = pageHeight - footerHeight;
 
 // Maroon strip
