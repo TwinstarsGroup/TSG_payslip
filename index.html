@@ -99,6 +99,27 @@ button:disabled {
   <button class="primary" onclick="adminLogin()">Login</button>
 </div>
 
+<!-- DATA BACKUP WARNING -->
+<div class="card" id="dataWarning" style="background: #fff3cd; border-left: 4px solid #ffc107; display: none;">
+  <h3 style="margin-top: 0; color: #856404;">⚠️ Important: Data Storage Notice</h3>
+  <p style="margin-bottom: 12px; color: #856404;">
+    Your employee records are stored locally in your browser. They will be lost if you:
+  </p>
+  <ul style="color: #856404; margin-bottom: 12px;">
+    <li>Clear browser data/cache</li>
+    <li>Use a different browser or device</li>
+    <li>Use incognito/private browsing mode</li>
+  </ul>
+  <p style="margin-bottom: 16px; color: #856404; font-weight: bold;">
+    Please backup your data regularly using the Export button below.
+  </p>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+    <button class="primary" onclick="exportData()" style="background: #28a745;">📥 Export Data (Backup)</button>
+    <button class="secondary" onclick="importData()">📤 Import Data (Restore)</button>
+  </div>
+  <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+</div>
+
 <!-- EMPLOYEE MASTER -->
 <div class="card">
 <h2>Employee Master Entry</h2>
@@ -583,6 +604,7 @@ function adminLogin() {
     sessionStorage.setItem("adminAuth", "true");
     adminPin.value = "";
     document.getElementById("adminLoginCard").style.display = "none";
+    document.getElementById("dataWarning").style.display = "block";
 
     startAutoLogoutTimer(); // ⏱️ START TIMER
     updateAdminUI(); // Update button states
@@ -671,10 +693,82 @@ function viewDeleteLog() {
   alert(message);
 }
 
+/* ================= DATA EXPORT/IMPORT ================= */
+function exportData() {
+  const employees = localStorage.getItem("employees") || "{}";
+  const deleteLogs = localStorage.getItem("deleteLogs") || "[]";
+  
+  const backupData = {
+    version: "1.0",
+    exportDate: new Date().toISOString(),
+    employees: JSON.parse(employees),
+    deleteLogs: JSON.parse(deleteLogs)
+  };
+  
+  const dataStr = JSON.stringify(backupData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(dataBlob);
+  
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `payslip_backup_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  
+  alert("Data exported successfully! Keep this file safe.");
+}
+
+function importData() {
+  if (!isAdmin()) {
+    alert("Admin access required to import data.");
+    return;
+  }
+  
+  if (!confirm("Warning: Importing will replace all existing data. Continue?")) {
+    return;
+  }
+  
+  document.getElementById("importFile").click();
+}
+
+function handleFileImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const backupData = JSON.parse(e.target.result);
+      
+      // Validate backup structure
+      if (!backupData.employees || !backupData.version) {
+        throw new Error("Invalid backup file format");
+      }
+      
+      // Restore data
+      localStorage.setItem("employees", JSON.stringify(backupData.employees));
+      localStorage.setItem("deleteLogs", JSON.stringify(backupData.deleteLogs || []));
+      
+      alert(`Data imported successfully!\nBackup Date: ${new Date(backupData.exportDate).toLocaleString()}\nEmployees: ${Object.keys(backupData.employees).length}`);
+      
+      loadDropdown();
+      clearForm();
+    } catch (error) {
+      alert("Error importing data: " + error.message);
+    }
+  };
+  
+  reader.readAsText(file);
+  event.target.value = ""; // Reset file input
+}
+
 /* ================= INIT ================= */
 window.onload = () => {
 	if (isAdmin()) {
     document.getElementById("adminLoginCard").style.display = "none";
+    document.getElementById("dataWarning").style.display = "block";
     startAutoLogoutTimer();
   }
   updateAdminUI();
