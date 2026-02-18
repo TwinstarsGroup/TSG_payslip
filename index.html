@@ -200,9 +200,14 @@ button:disabled {
     </select>
   </div>
 
-  <div class="form-grid-full">
+  <div>
     <label>Salary Period</label>
     <input id="period" placeholder="January 2026">
+  </div>
+
+  <div>
+    <label>Date of Issue</label>
+    <input type="date" id="dateOfIssue">
   </div>
 
   <div>
@@ -391,6 +396,7 @@ function downloadPDF() {
   // Validation checks
   const employeeName = empName.value.trim();
   const salaryPeriod = period.value.trim();
+  const dateOfIssueValue = dateOfIssue.value;
   const basicSalary = +basic.value || 0;
   const hraAmount = +hra.value || 0;
   const otherAllowance = +other.value || 0;
@@ -410,6 +416,12 @@ function downloadPDF() {
   // Check if period is provided
   if (!salaryPeriod) {
     alert("Salary period is required to generate PDF");
+    return;
+  }
+
+  // Check if date of issue is provided
+  if (!dateOfIssueValue) {
+    alert("Date of issue is required to generate PDF");
     return;
   }
 
@@ -458,12 +470,10 @@ function downloadPDF() {
   y = 52;
 
   /* ---------- PAYSLIP META ---------- */
-  const payslipNo = "PS-" + Date.now().toString().slice(-6);
-  const issueDate = new Date().toLocaleDateString();
+  const issueDate = new Date(dateOfIssueValue).toLocaleDateString();
 
   doc.setTextColor(...TEXT_MUTED);
   doc.setFontSize(10);
-  doc.text(`Payslip No : ${payslipNo}`, margin, y);
   doc.text(`Issue Date : ${issueDate}`, pageWidth - margin, y, { align: "right" });
 
   y += 10;
@@ -586,7 +596,7 @@ doc.text(
 );
 
 
-  doc.save(empName.value + ".pdf");
+  doc.save(`${employeeName} - ${salaryPeriod}.pdf`);
 }
 
 /* ---------- NUMBER TO WORDS ---------- */
@@ -663,6 +673,7 @@ function clearForm() {
   logoPreview.src = "";
 
   period.value = "";
+  dateOfIssue.value = "";
   basic.value = "";
   hra.value = "";
   other.value = "";
