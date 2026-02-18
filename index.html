@@ -433,7 +433,7 @@ function downloadPDF() {
 
   /* ---------- HEADER GRADIENT ---------- */
   doc.setFillColor(...BRAND_PRIMARY);
-  doc.rect(0, 0, pageWidth, 40, "F");
+  doc.rect(0, 0, pageWidth, 4, "F");
 
   doc.setFillColor(...BRAND_ACCENT);
   doc.rect(0, 36, pageWidth, 4, "F");
@@ -551,7 +551,7 @@ function downloadPDF() {
   /* ---------- WATERMARK ---------- */
   if (logoBase64.value.startsWith("data:image")) {
     try {
-      doc.setGState(new doc.GState({ opacity: 0.5 }));
+      doc.setGState(new doc.GState({ opacity: 0.3 }));
       doc.addImage(
         logoBase64.value,
         "PNG",
@@ -575,7 +575,7 @@ doc.rect(0, footerY, pageWidth, footerHeight, "F");
 
 // Footer text
 doc.setFont("helvetica", "normal");
-doc.setFontSize(10);
+doc.setFontSize(14);
 doc.setTextColor(255, 255, 255);
 
 doc.text(
