@@ -572,6 +572,7 @@ function adminLogin() {
 function adminLogout() {
   clearTimeout(logoutTimer);
   sessionStorage.removeItem("adminAuth");
+  clearForm();
   location.reload();
 }
 
