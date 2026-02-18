@@ -68,6 +68,7 @@ button {
 .primary { background: #0057b7; color: #fff; }
 .secondary { background: #777; color: #fff; }
 .danger { background: #b70000; color: #fff; }
+.clear-btn { background: #ff8c00; color: #fff; }
 
 button:disabled {
   background: #ccc;
@@ -112,7 +113,8 @@ button:disabled {
        style="display: flex; justify-content: center;">
   </div>
   <div style="margin-top: 20px; padding: 12px; background: #f0f8ff; border-radius: 6px; font-size: 13px; color: #0057b7;">
-    <strong>Note:</strong> For demo purposes, any Google account can sign in. In production, you should restrict access to specific email domains or users.
+    <strong>Setup Required:</strong> Replace <code>YOUR_GOOGLE_CLIENT_ID</code> in the HTML with your actual Google OAuth Client ID from Google Cloud Console.<br><br>
+    <strong>Note:</strong> For demo purposes, any Google account can sign in. In production, you should restrict access to specific email domains or users through server-side validation.
   </div>
 </div>
 
@@ -230,7 +232,7 @@ button:disabled {
   <div><button class="danger" onclick="deleteEmployee()" id="deleteBtn" disabled>Delete Employee</button></div>
   <div><button onclick="viewDeleteLog()">View Delete Log</button></div>
   <div><button class="secondary" onclick="adminLogout()" id="logoutBtn" disabled>Logout Admin</button></div>
-  <div class="form-grid-full"><button class="secondary" onclick="clearFormData()" style="background: #ff8c00;">🗑️ Clear All Fields</button></div>
+  <div class="form-grid-full"><button class="clear-btn" onclick="clearFormData()">🗑️ Clear All Fields</button></div>
 </div>
 </div>
 
@@ -244,23 +246,34 @@ let currentAdminEmail = null;
 
 /* ================= GOOGLE OAUTH ================= */
 function handleCredentialResponse(response) {
-  // Decode the JWT token to get user info
-  const responsePayload = parseJwt(response.credential);
-  
-  currentAdminEmail = responsePayload.email;
-  
-  // Store authentication
-  sessionStorage.setItem("adminAuth", "true");
-  sessionStorage.setItem("adminEmail", currentAdminEmail);
-  
-  // Hide login card and show main interface
-  document.getElementById("adminLoginCard").style.display = "none";
-  document.getElementById("dataWarning").style.display = "block";
-  
-  startAutoLogoutTimer();
-  updateAdminUI();
-  
-  alert(`Admin access granted for ${currentAdminEmail}`);
+  try {
+    // Decode the JWT token to get user info
+    const responsePayload = parseJwt(response.credential);
+    
+    // Validate email exists in the token
+    if (!responsePayload || !responsePayload.email) {
+      alert("Authentication failed: Unable to retrieve email from Google account");
+      return;
+    }
+    
+    currentAdminEmail = responsePayload.email;
+    
+    // Store authentication
+    sessionStorage.setItem("adminAuth", "true");
+    sessionStorage.setItem("adminEmail", currentAdminEmail);
+    
+    // Hide login card and show main interface
+    document.getElementById("adminLoginCard").style.display = "none";
+    document.getElementById("dataWarning").style.display = "block";
+    
+    startAutoLogoutTimer();
+    updateAdminUI();
+    
+    alert(`Admin access granted for ${currentAdminEmail}`);
+  } catch (error) {
+    console.error("Authentication error:", error);
+    alert("Authentication failed: Invalid or malformed token. Please try again.");
+  }
 }
 
 function parseJwt(token) {
