@@ -1,22 +1,660 @@
-function adminLogout() {
-    clearForm(); // Clear the employee dropdown and form data
-    window.location.reload();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Payslip Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, sans-serif;
+  background: #eef2f7;
+  margin: 0;
 }
 
-window.onload = function() {
-    var isAdmin = checkAdminStatus(); // Function that checks if the user is admin
-    if (!isAdmin) {
-        document.getElementById('payslipSection').style.display = 'none'; // Hide payslip section if not admin
-    }
-    loadDropdown(); // Calls loadDropdown function after checking admin status
+.container {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+h2 { text-align: center; margin-top: 0; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 20px;
+}
+
+.form-grid-full { grid-column: span 2; }
+
+label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: block;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+textarea { resize: vertical; }
+
+button {
+  padding: 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  width: 100%		  
+}
+
+.primary { background: #0057b7; color: #fff; }
+.secondary { background: #777; color: #fff; }
+.danger { background: #b70000; color: #fff; }
+
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.net {
+  background: #e8fff0;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 6px;
+}
+
+@media (max-width: 640px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid-full { grid-column: span 1; }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- ADMIN LOGIN -->					
+<div class="card" id="adminLoginCard">
+  <h2>Admin Login</h2>
+  <input id="adminPin" type="password" maxlength="6" placeholder="Enter 6-digit Admin PIN">
+  <button class="primary" onclick="adminLogin()">Login</button>
+</div>
+
+<!-- EMPLOYEE MASTER -->
+<div class="card">
+<h2>Employee Master Entry</h2>
+
+<div class="form-grid">
+  <div>
+    <label>Employee ID</label>
+    <input id="empId" placeholder="EMP001">
+  </div>
+
+  <div>
+    <label>Employee Name</label>
+    <input id="empName">
+  </div>
+
+  <div>
+    <label>Date of Joining</label>
+    <input type="date" id="doj">
+  </div>
+
+  <div>
+    <label>Position</label>
+    <input id="position">
+  </div>
+
+  <div>
+    <label>Account Number</label>
+    <input id="account">
+  </div>
+
+  <div>
+    <label>Company Name</label>
+    <input id="company">
+  </div>
+
+  <div class="form-grid-full">
+    <label>Company Logo (Base64 – resized PNG)</label>
+    <textarea id="logoBase64" rows="3"
+      placeholder="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."></textarea>
+    <img id="logoPreview" style="max-height:60px;margin-top:10px;">
+  </div>
+
+  <div class="form-grid-full">
+    <button class="primary" onclick="saveEmployee()">Save / Update Employee</button>
+  </div>
+</div>
+</div>
+
+<!-- PAYSLIP -->
+<div class="card">
+<h2>Payslip Generator</h2>
+
+<div class="form-grid">
+  <div class="form-grid-full">
+    <label>Select Employee</label>
+    <select id="employeeSelect" onchange="loadEmployee()">
+      <option value="">Select</option>
+    </select>
+  </div>
+
+  <div class="form-grid-full">
+    <label>Salary Period</label>
+    <input id="period" placeholder="January 2026">
+  </div>
+
+  <div>
+    <label>Basic Salary</label>
+    <input type="number" id="basic">
+  </div>
+
+  <div>
+    <label>HRA</label>
+    <input type="number" id="hra">
+  </div>
+
+  <div>
+    <label>Other Allowances</label>
+    <input type="number" id="other">
+  </div>
+
+  <div>
+    <label>Total Deductions</label>
+    <input type="number" id="deduction">
+  </div>
+
+  <div class="form-grid-full net" id="netSalary">Net Salary: Rs. 0</div>
+
+  <div><button class="primary" onclick="calculate()">Calculate</button></div>
+  <div><button onclick="downloadPDF()">Download PDF</button></div>
+  <div><button class="secondary" onclick="unlock()">Edit / Unlock</button></div>
+  <div><button class="danger" onclick="deleteEmployee()" id="deleteBtn" disabled>Delete Employee</button></div>
+  <div><button onclick="viewDeleteLog()">View Delete Log</button></div>
+  <div><button class="secondary" onclick="adminLogout()" id="logoutBtn" disabled>Logout Admin</button></div>
+</div>
+</div>
+
+</div>
+
+<script>
+/* ================= ADMIN CONFIG ================= */
+const ADMIN_PIN = "246810";
+const AUTO_LOGOUT_TIME = 10 * 60 * 1000;
+let logoutTimer;
+
+/* ================= STORAGE ================= */					 
+function getData() {
+  return JSON.parse(localStorage.getItem("employees")) || {};
+}
+
+function saveData(data) {
+  localStorage.setItem("employees", JSON.stringify(data));
+  loadDropdown();
+}
+
+["click", "mousemove", "keydown", "scroll", "touchstart"].forEach(event => {
+  document.addEventListener(event, resetAutoLogoutTimer);
+});
+
+/* ---------- SAVE ---------- */
+function saveEmployee() {
+  const id = empId.value.trim().toUpperCase();
+  if (!id) return alert("Employee ID required");
+
+  const data = getData();
+  if (!data[id] && Object.keys(data).length >= 25)
+    return alert("Maximum 25 employees allowed");
+
+  data[id] = {
+  id,
+  name: empName.value,
+  doj: doj.value,
+  position: position.value,
+  account: account.value,
+  company: company.value,
+  logo: logoBase64.value,
+  active: true
 };
 
-function loadDropdown() {
-    var isAdmin = checkAdminStatus();
-    if (isAdmin) {
-        // Logic to load dropdown data
-    } else {
-        // Clear dropdown if not admin
-        clearDropdown();
-    }
+
+  saveData(data);
+  alert("Employee saved");
 }
+
+/* ---------- LOAD ---------- */
+function loadDropdown() {
+  const data = getData();
+  employeeSelect.innerHTML = '<option value="">Select</option>';
+  Object.values(data).filter(e => e.active)
+    .forEach(e =>
+      employeeSelect.innerHTML += `<option value="${e.id}">${e.id} - ${e.name}</option>`
+    );
+}
+loadDropdown();
+
+function loadEmployee() {
+  const emp = getData()[employeeSelect.value];
+  if (!emp) return;
+  empId.value = emp.id;
+  empName.value = emp.name;
+  doj.value = emp.doj;
+  position.value = emp.position;
+  account.value = emp.account;
+  company.value = emp.company;
+  logoBase64.value = emp.logo || "";
+  logoPreview.src = emp.logo || "";
+
+  lock();
+}
+
+/* ---------- LOCK ---------- */
+function lock() {
+  ["empName","doj","position","account","company","logoBase64"]
+    .forEach(id => document.getElementById(id).readOnly = true);
+}
+
+function unlock() {
+  ["empName","doj","position","account","company","logoBase64"]
+    .forEach(id => document.getElementById(id).readOnly = false);
+}
+
+/* ---------- CALC ---------- */
+function calculate() {
+  const net =
+    (+basic.value||0) + (+hra.value||0) + (+other.value||0) - (+deduction.value||0);
+  netSalary.innerText = "Net Salary: Rs. " + net;
+}
+
+/* ---------- LOGO PREVIEW ---------- */
+logoBase64.oninput = () => {
+  logoPreview.src = logoBase64.value;
+};
+
+/* ---------- PDF ---------- */
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "A4" });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 18;
+  let y = 18;
+
+  /* ---------- BRAND COLORS (EDITABLE) ---------- */
+  const BRAND_PRIMARY = [25, 55, 110];   // Indigo Blue
+  const BRAND_ACCENT  = [64, 170, 165];  // Teal
+  const TEXT_DARK     = [40, 40, 40];
+  const TEXT_MUTED    = [120, 120, 120];
+
+
+  doc.setFont("helvetica", "normal");
+  doc.setCharSpace(0);
+
+  /* ---------- HEADER GRADIENT ---------- */
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.rect(0, 0, pageWidth, 40, "F");
+
+  doc.setFillColor(...BRAND_ACCENT);
+  doc.rect(0, 36, pageWidth, 4, "F");
+
+  /* ---------- LOGO (PROMINENT) ---------- */
+  if (logoBase64.value.startsWith("data:image")) {
+    try {
+      doc.addImage(logoBase64.value, "PNG", margin, 8, 50, 24);
+    } catch {}
+  }
+
+  /* ---------- COMPANY NAME ---------- */
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text(company.value, pageWidth - margin, 22, { align: "right" });
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("PAYSLIP", pageWidth - margin, 30, { align: "right" });
+
+  y = 52;
+
+  /* ---------- PAYSLIP META ---------- */
+  const payslipNo = "PS-" + Date.now().toString().slice(-6);
+  const issueDate = new Date().toLocaleDateString();
+
+  doc.setTextColor(...TEXT_MUTED);
+  doc.setFontSize(10);
+  doc.text(`Payslip No : ${payslipNo}`, margin, y);
+  doc.text(`Issue Date : ${issueDate}`, pageWidth - margin, y, { align: "right" });
+
+  y += 10;
+
+  /* ---------- EMPLOYEE DETAILS CARD ---------- */
+  doc.setFillColor(245, 248, 252);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 4, 4, "F");
+
+  doc.setTextColor(...TEXT_DARK);
+  doc.setFontSize(11);
+
+  y += 8;
+  doc.text(`Employee Name : ${empName.value}`, margin + 6, y);
+  doc.text(`Position      : ${position.value}`, margin + 6, y + 6);
+  doc.text(`Account No    : ${account.value}`, margin + 6, y + 12);
+
+  doc.text(`Salary Period : ${period.value}`, pageWidth - margin - 6, y, {
+    align: "right"
+  });
+
+  y += 36;
+
+  /* ---------- EARNINGS / DEDUCTIONS CARDS ---------- */
+  const cardWidth = (pageWidth - margin * 2 - 10) / 2;
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(margin, y, cardWidth, 40, 4, 4, "F");
+  doc.roundedRect(margin + cardWidth + 10, y, cardWidth, 40, 4, 4, "F");
+
+  doc.setDrawColor(...BRAND_ACCENT);
+  doc.roundedRect(margin, y, cardWidth, 40, 4, 4);
+  doc.roundedRect(margin + cardWidth + 10, y, cardWidth, 40, 4, 4);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...BRAND_PRIMARY);
+
+  doc.text("EARNINGS", margin + 6, y + 8);
+  doc.text("DEDUCTIONS", margin + cardWidth + 16, y + 8);
+
+  const b = +basic.value || 0;
+  const h = +hra.value || 0;
+  const o = +other.value || 0;
+  const d = +deduction.value || 0;
+  const net = b + h + o - d;
+
+  const fmt = n => "Rs. " + n.toLocaleString("en-IN");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(...TEXT_DARK);
+
+  doc.text(`Basic Salary : ${fmt(b)}`, margin + 6, y + 16);
+  doc.text(`HRA          : ${fmt(h)}`, margin + 6, y + 22);
+  doc.text(`Other        : ${fmt(o)}`, margin + 6, y + 28);
+
+  doc.text(`Total        : ${fmt(d)}`, margin + cardWidth + 16, y + 16);
+
+  y += 50;
+
+  /* ---------- NET SALARY HIGHLIGHT ---------- */
+  doc.setFillColor(...BRAND_ACCENT);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 18, 5, 5, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`NET SALARY CREDITED : ${fmt(net)}`, pageWidth / 2, y + 12, {
+    align: "center"
+  });
+
+  y += 26;
+
+  /* ---------- AMOUNT IN WORDS ---------- */
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(10);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text(
+    `Amount in words : ${numberToWords(net)} Rupees Only`,
+    pageWidth / 2,
+    y,
+    { align: "center" }
+  );
+
+  /* ---------- WATERMARK ---------- */
+  if (logoBase64.value.startsWith("data:image")) {
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.05 }));
+      doc.addImage(
+        logoBase64.value,
+        "PNG",
+        pageWidth / 2 - 40,
+        pageHeight / 2 - 40,
+        80,
+        40
+      );
+      doc.setGState(new doc.GState({ opacity: 1 }));
+    } catch {}
+  }
+
+  /* ---------- FOOTER ---------- */
+  /* ---------- FOOTER STRIP ---------- */
+const footerHeight = 14;
+const footerY = pageHeight - footerHeight;
+
+// Maroon strip
+doc.setFillColor(128, 0, 32); // Maroon
+doc.rect(0, footerY, pageWidth, footerHeight, "F");
+
+// Footer text
+doc.setFont("helvetica", "normal");
+doc.setFontSize(10);
+doc.setTextColor(255, 255, 255);
+
+doc.text(
+  "This is a system generated payslip. No signature required.",
+  pageWidth / 2,
+  footerY + 9,
+  { align: "center" }
+);
+
+
+  doc.save(empName.value + ".pdf");
+}
+
+/* ---------- NUMBER TO WORDS ---------- */
+function numberToWords(num) {
+  const a = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
+    "Sixteen", "Seventeen", "Eighteen", "Nineteen"
+  ];
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  if (num === 0) return "Zero";
+
+  const inWords = n => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + " " + a[n % 10];
+    if (n < 1000) return a[Math.floor(n / 100)] + " Hundred " + inWords(n % 100);
+    if (n < 100000) return inWords(Math.floor(n / 1000)) + " Thousand " + inWords(n % 1000);
+    if (n < 10000000) return inWords(Math.floor(n / 100000)) + " Lakh " + inWords(n % 100000);
+    return inWords(Math.floor(n / 10000000)) + " Crore " + inWords(n % 10000000);
+  };
+
+  return inWords(num).trim();
+}
+
+/*--------------Delete Parting Employee Records-------------------------------*/
+function deleteEmployee() {
+  if (!isAdmin()) {
+    alert("Admin access required.");
+    return;
+  }
+
+  const id = employeeSelect.value;
+  if (!id) {
+    alert("Select an employee first.");
+    return;
+  }
+
+  if (!confirm(`Soft delete employee ${id}?`)) return;
+
+  const data = getData();
+  const logs = JSON.parse(localStorage.getItem("deleteLogs")) || [];
+
+  // Soft delete
+  data[id].active = false;
+
+  // Log entry
+  logs.push({
+    empId: id,
+    name: data[id].name,
+    deletedAt: new Date().toLocaleString(),
+    action: "Soft Deleted"
+  });
+
+  localStorage.setItem("employees", JSON.stringify(data));
+  localStorage.setItem("deleteLogs", JSON.stringify(logs));
+
+  alert("Employee marked as inactive.");
+
+  loadDropdown();
+  clearForm();
+}
+
+
+/*--------------ClearForm-------------------------------*/
+function clearForm() {
+  empId.value = "";
+  empName.value = "";
+  doj.value = "";
+  position.value = "";
+  account.value = "";
+  company.value = "";
+  logoBase64.value = "";
+  logoPreview.src = "";
+
+  period.value = "";
+  basic.value = "";
+  hra.value = "";
+  other.value = "";
+  deduction.value = "";
+
+  netSalary.innerText = "Net Salary: Rs. 0";
+  employeeSelect.value = "";
+}
+
+/*--------------ADMIN SESSION LOGIC---------------------------*/
+function adminLogin() {
+  if (adminPin.value === ADMIN_PIN) {
+    sessionStorage.setItem("adminAuth", "true");
+    adminPin.value = "";
+    document.getElementById("adminLoginCard").style.display = "none";
+
+    startAutoLogoutTimer(); // ⏱️ START TIMER
+    updateAdminUI(); // Update button states
+
+    alert("Admin access granted");
+  } else {
+    alert("Invalid Admin PIN");
+  }
+}
+
+
+function adminLogout() {
+  clearTimeout(logoutTimer);
+  sessionStorage.removeItem("adminAuth");
+  clearForm();
+  location.reload();
+}
+
+
+function isAdmin() {
+  return sessionStorage.getItem("adminAuth") === "true";
+}
+
+function startAutoLogoutTimer() {
+  clearTimeout(logoutTimer);
+
+  logoutTimer = setTimeout(() => {
+    sessionStorage.removeItem("adminAuth");
+    alert("Session expired due to inactivity. Please login again.");
+    location.reload();
+  }, AUTO_LOGOUT_TIME);
+}
+
+function resetAutoLogoutTimer() {
+  if (isAdmin()) {
+    startAutoLogoutTimer();
+  }
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  document.getElementById("deleteBtn").disabled = !admin;
+  document.getElementById("logoutBtn").disabled = !admin;
+}
+
+
+/*-----------ACTIVE EMPLOYEES---------*/
+function loadDropdown() {
+  const data = getData();
+  employeeSelect.innerHTML = '<option value="">Select</option>';
+
+  Object.values(data)
+    .filter(e => e.active !== false)
+    .forEach(e => {
+      employeeSelect.innerHTML +=
+        `<option value="${e.id}">${e.id} - ${e.name}</option>`;
+    });
+}
+
+/*----------VIEW DELETED LOG------------*/
+function viewDeleteLog() {
+  if (!isAdmin()) {
+    alert("Admin access required.");
+    return;
+  }
+
+  const logs = JSON.parse(localStorage.getItem("deleteLogs")) || [];
+
+  if (logs.length === 0) {
+    alert("No deleted employee records.");
+    return;
+  }
+
+  let message = "Deleted Employee Log:\n\n";
+
+  logs.forEach(l => {
+    message +=
+      `ID: ${l.empId}\n` +
+      `Name: ${l.name}\n` +
+      `When: ${l.deletedAt}\n` +
+      `Action: ${l.action}\n` +
+      `----------------------\n`;
+  });
+
+  alert(message);
+}
+
+/* ================= INIT ================= */
+window.onload = () => {
+	if (isAdmin()) {
+    document.getElementById("adminLoginCard").style.display = "none";
+    startAutoLogoutTimer();
+  }
+  updateAdminUI();
+};
+
+
+</script>
+</body>
+</html>
