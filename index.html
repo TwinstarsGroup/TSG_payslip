@@ -188,7 +188,7 @@ button:disabled {
 
   <div><button class="primary" onclick="calculate()">Calculate</button></div>
   <div><button onclick="downloadPDF()">Download PDF</button></div>
-  <div><button class="secondary" onclick="unlock()">Edit / Unlock</button></div>
+  <div><button class="secondary" onclick="unlock()" id="unlockBtn" disabled>Edit / Unlock</button></div>
   <div><button class="danger" onclick="deleteEmployee()" id="deleteBtn" disabled>Delete Employee</button></div>
   <div><button onclick="viewDeleteLog()">View Delete Log</button></div>
   <div><button class="secondary" onclick="adminLogout()" id="logoutBtn" disabled>Logout Admin</button></div>
@@ -293,6 +293,31 @@ logoBase64.oninput = () => {
 
 /* ---------- PDF ---------- */
 function downloadPDF() {
+  // Validation checks
+  const employeeName = empName.value.trim();
+  const salaryPeriod = period.value.trim();
+  const basicSalary = +basic.value || 0;
+  const hraAmount = +hra.value || 0;
+  const otherAllowance = +other.value || 0;
+
+  // Check if employee name is provided
+  if (!employeeName) {
+    alert("Employee name is required to generate PDF");
+    return;
+  }
+
+  // Check if at least one income component has a value
+  if (basicSalary === 0 && hraAmount === 0 && otherAllowance === 0) {
+    alert("At least one income component (Basic Salary, HRA, or Other Allowances) must have a value");
+    return;
+  }
+
+  // Check if period is provided
+  if (!salaryPeriod) {
+    alert("Salary period is required to generate PDF");
+    return;
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "A4" });
 
@@ -601,6 +626,7 @@ function updateAdminUI() {
   const admin = isAdmin();
   document.getElementById("deleteBtn").disabled = !admin;
   document.getElementById("logoutBtn").disabled = !admin;
+  document.getElementById("unlockBtn").disabled = !admin;
 }
 
 
