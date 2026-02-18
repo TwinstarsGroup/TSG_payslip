@@ -551,7 +551,7 @@ function downloadPDF() {
   /* ---------- WATERMARK ---------- */
   if (logoBase64.value.startsWith("data:image")) {
     try {
-      doc.setGState(new doc.GState({ opacity: 0.25 }));
+      doc.setGState(new doc.GState({ opacity: 0.5 }));
       doc.addImage(
         logoBase64.value,
         "PNG",
