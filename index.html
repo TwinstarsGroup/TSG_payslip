@@ -249,15 +249,6 @@ function handleCredentialResponse(response) {
   try {
     // Decode the JWT token to get user info
     const responsePayload = parseJwt(response.credential);
-
-	const allowedDomains = ['twinstarsgroup.com'];
-	const emailDomain = currentAdminEmail.split('@')[1];
-	if (!allowedDomains.includes(emailDomain)) {
-  		alert('Access denied: Your email domain is not authorized');
-  		sessionStorage.removeItem("adminAuth");
-  		sessionStorage.removeItem("adminEmail");
-  	return;
-	}  
     
     // Validate email exists in the token
     if (!responsePayload || !responsePayload.email) {
@@ -265,7 +256,18 @@ function handleCredentialResponse(response) {
       return;
     }
     
+    // Extract email from the token
     currentAdminEmail = responsePayload.email;
+
+	// Validate email domain
+	const allowedDomains = ['twinstarsgroup.com'];
+	const emailDomain = currentAdminEmail.split('@')[1];
+	if (!allowedDomains.includes(emailDomain)) {
+  		alert('Access denied: Your email domain is not authorized');
+  		sessionStorage.removeItem("adminAuth");
+  		sessionStorage.removeItem("adminEmail");
+  	return;
+	}
     
     // Store authentication
     sessionStorage.setItem("adminAuth", "true");
