@@ -99,7 +99,7 @@ button:disabled {
   <h2>Admin Login</h2>
   <p style="text-align: center; color: #666; margin-bottom: 20px;">Sign in with your Google account to access the admin panel</p>
   <div id="g_id_onload"
-       data-client_id="YOUR_GOOGLE_CLIENT_ID"
+       data-client_id="625915335442-uq6lv26p9bvclqclu8tqb11l4otr7vbl.apps.googleusercontent.com"
        data-callback="handleCredentialResponse"
        data-auto_prompt="false">
   </div>
@@ -249,6 +249,15 @@ function handleCredentialResponse(response) {
   try {
     // Decode the JWT token to get user info
     const responsePayload = parseJwt(response.credential);
+
+	const allowedDomains = ['twinstarsgroup.com'];
+	const emailDomain = currentAdminEmail.split('@')[1];
+	if (!allowedDomains.includes(emailDomain)) {
+  		alert('Access denied: Your email domain is not authorized');
+  		sessionStorage.removeItem("adminAuth");
+  		sessionStorage.removeItem("adminEmail");
+  	return;
+	}  
     
     // Validate email exists in the token
     if (!responsePayload || !responsePayload.email) {
