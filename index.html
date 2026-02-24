@@ -5,6 +5,10 @@
 <title>Payslip Generator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+<!-- Default empty config; config.js (gitignored) overrides these values -->
+<script>var SUPABASE_URL = ''; var SUPABASE_ANON_KEY = '';</script>
+<script src="config.js" onerror="/* config.js not found – using localStorage fallback */"></script>
 
 <style>
 * { box-sizing: border-box; }
@@ -122,17 +126,20 @@ button:disabled {
 <!-- DATA BACKUP WARNING -->
 <div class="card" id="dataWarning" style="background: #fff3cd; border-left: 4px solid #ffc107; display: none;">
   <h3 style="margin-top: 0; color: #856404;">⚠️ Important: Data Storage Notice</h3>
-  <p style="margin-bottom: 12px; color: #856404;">
-    Your employee records are stored locally in your browser. They will be lost if you:
-  </p>
-  <ul style="color: #856404; margin-bottom: 12px;">
-    <li>Clear browser data/cache</li>
-    <li>Use a different browser or device</li>
-    <li>Use incognito/private browsing mode</li>
-  </ul>
-  <p style="margin-bottom: 16px; color: #856404; font-weight: bold;">
-    Please backup your data regularly using the Export button below.
-  </p>
+  <p id="storageIndicator" style="font-weight: bold; margin-bottom: 8px; color: #856404;">🖥️ Using local browser storage</p>
+  <div id="localStorageWarning">
+    <p style="margin-bottom: 12px; color: #856404;">
+      Your employee records are stored locally in your browser. They will be lost if you:
+    </p>
+    <ul style="color: #856404; margin-bottom: 12px;">
+      <li>Clear browser data/cache</li>
+      <li>Use a different browser or device</li>
+      <li>Use incognito/private browsing mode</li>
+    </ul>
+    <p style="margin-bottom: 16px; color: #856404; font-weight: bold;">
+      Please backup your data regularly using the Export button below.
+    </p>
+  </div>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
     <button class="primary" onclick="exportData()" style="background: #28a745;" aria-label="Export employee data as backup file">📥 Export Data (Backup)</button>
     <button class="secondary" onclick="importData()" aria-label="Import employee data from backup file">📤 Import Data (Restore)</button>
@@ -176,9 +183,13 @@ button:disabled {
   </div>
 
   <div class="form-grid-full">
-    <label>Company Logo (Base64 – resized PNG)</label>
-    <textarea id="logoBase64" rows="3"
-      placeholder="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."></textarea>
+    <label>Company Logo (URL or Base64)</label>
+    <div style="display: flex; gap: 8px; align-items: flex-start;">
+      <textarea id="logoBase64" rows="3" style="flex: 1;"
+        placeholder="Paste Base64 image data or click 'Use Default Logo'"></textarea>
+      <button type="button" onclick="useDefaultLogo()"
+        style="width:auto;padding:10px 14px;background:#0057b7;color:#fff;border-radius:6px;border:none;cursor:pointer;white-space:nowrap;font-size:13px;">Use Default Logo</button>
+    </div>
     <img id="logoPreview" style="max-height:60px;margin-top:10px;">
   </div>
 
@@ -250,19 +261,23 @@ const AUTO_LOGOUT_TIME = 10 * 60 * 1000;
 let logoutTimer;
 let currentAdminEmail = null;
 
+/* ================= SUPABASE SETUP ================= */
+const _supabaseUrl = (typeof SUPABASE_URL !== 'undefined') ? SUPABASE_URL : '';
+const _supabaseKey = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+const db = (_supabaseUrl && _supabaseKey && window.supabase)
+  ? window.supabase.createClient(_supabaseUrl, _supabaseKey)
+  : null;
+
 /* ================= GOOGLE OAUTH ================= */
 function handleCredentialResponse(response) {
   try {
-    // Decode the JWT token to get user info
     const responsePayload = parseJwt(response.credential);
-    
-    // Validate email exists in the token
+
     if (!responsePayload || !responsePayload.email) {
       alert("Authentication failed: Unable to retrieve email from Google account");
       return;
     }
-    
-    // Extract email from the token
+
     currentAdminEmail = responsePayload.email;
 
 	// Validate email domain
@@ -274,18 +289,16 @@ function handleCredentialResponse(response) {
   		sessionStorage.removeItem("adminEmail");
   	return;
 	}
-    
-    // Store authentication
+
     sessionStorage.setItem("adminAuth", "true");
     sessionStorage.setItem("adminEmail", currentAdminEmail);
-    
-    // Hide login card and show main interface
+
     document.getElementById("adminLoginCard").style.display = "none";
     document.getElementById("dataWarning").style.display = "block";
-    
+
     startAutoLogoutTimer();
     updateAdminUI();
-    
+
     alert(`Admin access granted for ${currentAdminEmail}`);
   } catch (error) {
     console.error("Authentication error:", error);
@@ -299,18 +312,53 @@ function parseJwt(token) {
   const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
     return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
   }).join(''));
-  
+
   return JSON.parse(jsonPayload);
 }
 
-/* ================= STORAGE ================= */					 
-function getData() {
+/* ================= STORAGE ================= */
+async function getData() {
+  if (db) {
+    const { data, error } = await db.from('employees').select('*');
+    if (error) { console.error('Supabase error:', error); return {}; }
+    return (data || []).reduce((acc, emp) => { acc[emp.id] = emp; return acc; }, {});
+  }
   return JSON.parse(localStorage.getItem("employees")) || {};
 }
 
-function saveData(data) {
+async function saveEmployeeRecord(emp) {
+  if (db) {
+    const { error } = await db.from('employees').upsert(emp);
+    if (error) throw error;
+    return;
+  }
+  const data = JSON.parse(localStorage.getItem("employees")) || {};
+  data[emp.id] = emp;
   localStorage.setItem("employees", JSON.stringify(data));
-  loadDropdown();
+}
+
+async function getDeleteLogs() {
+  if (db) {
+    const { data, error } = await db.from('delete_logs').select('*').order('id', { ascending: true });
+    if (error) { console.error('Supabase error:', error); return []; }
+    return (data || []).map(l => ({
+      empId: l.emp_id, name: l.name, deletedAt: l.deleted_at, action: l.action
+    }));
+  }
+  return JSON.parse(localStorage.getItem("deleteLogs")) || [];
+}
+
+async function addDeleteLog(log) {
+  if (db) {
+    const { error } = await db.from('delete_logs').insert({
+      emp_id: log.empId, name: log.name, deleted_at: log.deletedAt, action: log.action
+    });
+    if (error) throw error;
+    return;
+  }
+  const logs = JSON.parse(localStorage.getItem("deleteLogs")) || [];
+  logs.push(log);
+  localStorage.setItem("deleteLogs", JSON.stringify(logs));
 }
 
 ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach(event => {
@@ -318,43 +366,48 @@ function saveData(data) {
 });
 
 /* ---------- SAVE ---------- */
-function saveEmployee() {
+async function saveEmployee() {
   const id = empId.value.trim().toUpperCase();
   if (!id) return alert("Employee ID required");
 
-  const data = getData();
+  const data = await getData();
   if (!data[id] && Object.keys(data).length >= 25)
     return alert("Maximum 25 employees allowed");
 
-  data[id] = {
-  id,
-  name: empName.value,
-  doj: doj.value,
-  position: position.value,
-  account: account.value,
-  company: company.value,
-  logo: logoBase64.value,
-  active: true
-};
+  const emp = {
+    id,
+    name: empName.value,
+    doj: doj.value,
+    position: position.value,
+    account: account.value,
+    company: company.value,
+    logo: logoBase64.value,
+    active: true
+  };
 
-
-  saveData(data);
-  alert("Employee saved");
+  try {
+    await saveEmployeeRecord(emp);
+    await loadDropdown();
+    alert("Employee saved");
+  } catch (e) {
+    alert("Error saving employee: " + e.message);
+  }
 }
 
 /* ---------- LOAD ---------- */
-function loadDropdown() {
-  const data = getData();
+async function loadDropdown() {
+  const data = await getData();
   employeeSelect.innerHTML = '<option value="">Select</option>';
-  Object.values(data).filter(e => e.active)
+  Object.values(data)
+    .filter(e => e.active !== false)
     .forEach(e =>
       employeeSelect.innerHTML += `<option value="${e.id}">${e.id} - ${e.name}</option>`
     );
 }
-loadDropdown();
 
-function loadEmployee() {
-  const emp = getData()[employeeSelect.value];
+async function loadEmployee() {
+  const data = await getData();
+  const emp = data[employeeSelect.value];
   if (!emp) return;
   empId.value = emp.id;
   empName.value = emp.name;
@@ -391,9 +444,40 @@ logoBase64.oninput = () => {
   logoPreview.src = logoBase64.value;
 };
 
+/* ---------- DEFAULT LOGO ---------- */
+async function useDefaultLogo() {
+  const DEFAULT_LOGO_WIDTH = 260;
+  const DEFAULT_LOGO_HEIGHT = 80;
+  try {
+    const response = await fetch('assets/logo.svg');
+    if (!response.ok) throw new Error('File not found');
+    const svgText = await response.text();
+    const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(svgBlob);
+
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || DEFAULT_LOGO_WIDTH;
+        canvas.height = img.naturalHeight || DEFAULT_LOGO_HEIGHT;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const base64 = canvas.toDataURL('image/png');
+        logoBase64.value = base64;
+        logoPreview.src = base64;
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+      img.src = url;
+    });
+  } catch (e) {
+    alert("Default logo could not be loaded. Ensure the app is served from a web server (not opened as a local file). Error: " + e.message);
+  }
+}
+
 /* ---------- PDF ---------- */
 function downloadPDF() {
-  // Validation checks
   const employeeName = empName.value.trim();
   const salaryPeriod = period.value.trim();
   const dateOfIssueValue = dateOfIssue.value;
@@ -401,25 +485,21 @@ function downloadPDF() {
   const hraAmount = +hra.value || 0;
   const otherAllowance = +other.value || 0;
 
-  // Check if employee name is provided
   if (!employeeName) {
     alert("Employee name is required to generate PDF");
     return;
   }
 
-  // Check if at least one income component has a value
   if (basicSalary === 0 && hraAmount === 0 && otherAllowance === 0) {
     alert("At least one income component (Basic Salary, HRA, or Other Allowances) must be greater than 0");
     return;
   }
 
-  // Check if period is provided
   if (!salaryPeriod) {
     alert("Salary period is required to generate PDF");
     return;
   }
 
-  // Check if date of issue is provided
   if (!dateOfIssueValue) {
     alert("Date of issue is required to generate PDF");
     return;
@@ -625,7 +705,7 @@ function numberToWords(num) {
 }
 
 /*--------------Delete Parting Employee Records-------------------------------*/
-function deleteEmployee() {
+async function deleteEmployee() {
   if (!isAdmin()) {
     alert("Admin access required.");
     return;
@@ -639,27 +719,25 @@ function deleteEmployee() {
 
   if (!confirm(`Soft delete employee ${id}?`)) return;
 
-  const data = getData();
-  const logs = JSON.parse(localStorage.getItem("deleteLogs")) || [];
-
-  // Soft delete
+  const data = await getData();
   data[id].active = false;
 
-  // Log entry
-  logs.push({
+  const log = {
     empId: id,
     name: data[id].name,
     deletedAt: new Date().toLocaleString(),
     action: "Soft Deleted"
-  });
+  };
 
-  localStorage.setItem("employees", JSON.stringify(data));
-  localStorage.setItem("deleteLogs", JSON.stringify(logs));
-
-  alert("Employee marked as inactive.");
-
-  loadDropdown();
-  clearForm();
+  try {
+    await saveEmployeeRecord(data[id]);
+    await addDeleteLog(log);
+    alert("Employee marked as inactive.");
+    await loadDropdown();
+    clearForm();
+  } catch (e) {
+    alert("Error deleting employee: " + e.message);
+  }
 }
 
 
@@ -731,28 +809,14 @@ function updateAdminUI() {
   document.getElementById("unlockBtn").disabled = !admin;
 }
 
-
-/*-----------ACTIVE EMPLOYEES---------*/
-function loadDropdown() {
-  const data = getData();
-  employeeSelect.innerHTML = '<option value="">Select</option>';
-
-  Object.values(data)
-    .filter(e => e.active !== false)
-    .forEach(e => {
-      employeeSelect.innerHTML +=
-        `<option value="${e.id}">${e.id} - ${e.name}</option>`;
-    });
-}
-
 /*----------VIEW DELETED LOG------------*/
-function viewDeleteLog() {
+async function viewDeleteLog() {
   if (!isAdmin()) {
     alert("Admin access required.");
     return;
   }
 
-  const logs = JSON.parse(localStorage.getItem("deleteLogs")) || [];
+  const logs = await getDeleteLogs();
 
   if (logs.length === 0) {
     alert("No deleted employee records.");
@@ -774,21 +838,21 @@ function viewDeleteLog() {
 }
 
 /* ================= DATA EXPORT/IMPORT ================= */
-function exportData() {
-  const employees = localStorage.getItem("employees") || "{}";
-  const deleteLogs = localStorage.getItem("deleteLogs") || "[]";
-  
+async function exportData() {
+  const employees = await getData();
+  const deleteLogs = await getDeleteLogs();
+
   const backupData = {
     version: "1.0",
     exportDate: new Date().toISOString(),
-    employees: JSON.parse(employees),
-    deleteLogs: JSON.parse(deleteLogs)
+    employees,
+    deleteLogs
   };
-  
+
   const dataStr = JSON.stringify(backupData, null, 2);
   const dataBlob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(dataBlob);
-  
+
   const link = document.createElement("a");
   link.href = url;
   link.download = `payslip_backup_${new Date().toISOString().split('T')[0]}.json`;
@@ -796,7 +860,7 @@ function exportData() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  
+
   alert("Data exported successfully! Keep this file safe.");
 }
 
@@ -805,32 +869,42 @@ function importData() {
     alert("Admin access required to import data.");
     return;
   }
-  
+
   if (!confirm("Warning: Importing will replace all existing data. Continue?")) {
     return;
   }
-  
+
   document.getElementById("importFile").click();
 }
 
-function handleFileImport(event) {
+async function handleFileImport(event) {
   const file = event.target.files[0];
   if (!file) return;
-  
+
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const backupData = JSON.parse(e.target.result);
-      
+
       // Validate backup structure
       if (!backupData.employees || !backupData.version) {
         throw new Error("Invalid backup file format");
       }
-      
-      // Restore data
-      localStorage.setItem("employees", JSON.stringify(backupData.employees));
-      localStorage.setItem("deleteLogs", JSON.stringify(backupData.deleteLogs || []));
-      
+
+      if (db) {
+        // Upsert each employee into Supabase
+        for (const emp of Object.values(backupData.employees)) {
+          await saveEmployeeRecord(emp);
+        }
+        for (const log of (backupData.deleteLogs || [])) {
+          await addDeleteLog(log);
+        }
+      } else {
+        // Restore data to localStorage
+        localStorage.setItem("employees", JSON.stringify(backupData.employees));
+        localStorage.setItem("deleteLogs", JSON.stringify(backupData.deleteLogs || []));
+      }
+
       const backupDate = new Date(backupData.exportDate).toLocaleString();
       const employeeCount = Object.keys(backupData.employees).length;
       alert(
@@ -838,27 +912,36 @@ function handleFileImport(event) {
         `Backup Date: ${backupDate}\n` +
         `Employees Restored: ${employeeCount}`
       );
-      
-      loadDropdown();
+
+      await loadDropdown();
       clearForm();
     } catch (error) {
       alert("Error importing data: " + error.message);
     }
   };
-  
+
   reader.readAsText(file);
   event.target.value = ""; // Reset file input
 }
 
 /* ================= INIT ================= */
-window.onload = () => {
-	if (isAdmin()) {
+window.onload = async () => {
+  if (db) {
+    const indicator = document.getElementById("storageIndicator");
+    indicator.textContent = "☁️ Connected to Supabase – data is synced to the cloud";
+    indicator.style.color = "#28a745";
+    document.getElementById("localStorageWarning").style.display = "none";
+    document.getElementById("dataWarning").style.background = "#d4edda";
+    document.getElementById("dataWarning").style.borderLeftColor = "#28a745";
+  }
+  if (isAdmin()) {
     currentAdminEmail = sessionStorage.getItem("adminEmail");
     document.getElementById("adminLoginCard").style.display = "none";
     document.getElementById("dataWarning").style.display = "block";
     startAutoLogoutTimer();
   }
   updateAdminUI();
+  await loadDropdown();
 };
 
 
