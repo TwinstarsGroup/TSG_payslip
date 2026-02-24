@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 80" width="260" height="80">
+  <!-- Star 1 (Goldenrod) -->
+  <g transform="translate(30,40)">
+    <polygon points="0,-28 6.5,-10 25,-10 11,2 16,20 0,8 -16,20 -11,2 -25,-10 -6.5,-10" fill="#DAA520"/>
+  </g>
+  <!-- Star 2 (Indigo Blue, offset to create "twin" effect) -->
+  <g transform="translate(56,40)">
+    <polygon points="0,-28 6.5,-10 25,-10 11,2 16,20 0,8 -16,20 -11,2 -25,-10 -6.5,-10" fill="#19376E" opacity="0.9"/>
+  </g>
+  <!-- Company name -->
+  <text x="88" y="38" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#19376E">TwinStar</text>
+  <text x="89" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#DAA520" letter-spacing="4">GROUP</text>
+</svg>
