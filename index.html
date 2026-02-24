@@ -449,7 +449,7 @@ async function useDefaultLogo() {
   const DEFAULT_LOGO_WIDTH = 260;
   const DEFAULT_LOGO_HEIGHT = 80;
   try {
-    const response = await fetch('assets/logo.svg');
+    const response = await fetch('assets/logo200.png');
     if (!response.ok) throw new Error('File not found');
     const svgText = await response.text();
     const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
